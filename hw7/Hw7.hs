@@ -1,5 +1,6 @@
 data Prop a = Var a | Const Bool   | And (Prop a) (Prop a) | Or (Prop a) (Prop a)
                     | Neg (Prop a) | Imp (Prop a) (Prop a) | Iff (Prop a) (Prop a)
+					| Xor (Prop a) (Prop a)
   deriving (Show,Read)
 
 data Token = VSym String | CSym Bool | BOp String | UOp | LParen | RParen | Err
@@ -18,6 +19,7 @@ preproc ('!':xs) = " ! " ++ preproc xs
 preproc ('/':('\\':xs)) = " /\\ " ++ preproc xs
 preproc ('\\':('/':xs)) = " \\/ " ++ preproc xs
 preproc ('-':('>':xs)) = " -> " ++ preproc xs
+preproc ('<' :('>':xs)) = " <> " ++ preproc xs --Xor 
 preproc ('<':('-':('>':xs))) = " <-> " ++ preproc xs
 preproc ('(':xs) = " ( " ++ preproc xs
 preproc (')':xs) = " ) " ++ preproc xs
@@ -32,6 +34,7 @@ readOne "/\\" = BOp "And"
 readOne "\\/" = BOp "Or"
 readOne "->" = BOp "Imp"
 readOne "<->" = BOp "Iff"
+readOne "><" = BOp "Xor" --Xor
 readOne "(" = LParen
 readOne ")" = RParen
 readOne (x:xs) = if checkLetter x &&
@@ -66,6 +69,7 @@ helper (ts, (TrueProp p1 : (BOp op : (TrueProp p2 : s))))
                     | op == "Or"  = helper (ts,(TrueProp (Or p2 p1) : s))
                     | op == "Imp" = helper (ts,(TrueProp (Imp p2 p1) : s))
                     | op == "Iff" = helper (ts,(TrueProp (Iff p2 p1) : s))
+					| op == "Xor" = helper (ts,(TrueProp (Xor p2 p1) : s)) -- Xor
 helper (ts, (RParen:(TrueProp p:(LParen:s)))) = helper (ts,TrueProp p : s)
 helper (t:ts, s) = helper (ts,t:s)
 helper ([],s) = ([],s)
@@ -84,6 +88,7 @@ fv (And p1 p2) = removeDups (fv p1 ++ fv p2)
 fv (Or p1 p2)  = removeDups (fv p1 ++ fv p2)
 fv (Imp p1 p2) = removeDups (fv p1 ++ fv p2)
 fv (Iff p1 p2) = removeDups (fv p1 ++ fv p2)
+fv (Xor p1 p2) = removeDups (fv p1 ++ fv p2)
 fv (Neg p)     = fv p
 
 --find value based off of tuple
@@ -98,6 +103,8 @@ eval env (Or  p1 p2) = eval env p1 || eval env p2
 eval env (Neg p) = not (eval env p)
 eval env (Imp p1 p2) = if eval env p1 then eval env p2 else True
 eval env (Iff p1 p2) = eval env p1 == eval env p2
+eval env (Xor p1 p2) = xor (eval env p1) (eval env p2)
+
 
 genEnvs :: [a] -> [[(a,Bool)]]
 genEnvs = foldr (\x y -> map ((x,True):) y ++ map ((x,False):) y) [[]]
@@ -109,6 +116,14 @@ checkSat p = any (\env -> eval env p) (genEnvs (fv p))
 isNothing :: Maybe a -> Bool
 isNothing Nothing = True
 isNothing _ = False
+
+--helper xor
+xor :: Bool -> Bool -> Bool
+xor True True = False
+xor True False = True
+xor False True = True
+xor False False = False
+
 
 --remove just?
 removeJust :: Maybe (Prop a) -> Prop a
